@@ -114,23 +114,96 @@ int main(int argc, const char* argv[])
 				break;
 			}
 			case OP_AND:
-				// and
+			{
+				/* destination register */
+				uint16_t r0 = (instr >> 9) & 0x7;
+				/* first operand */
+				uint16_t r1 = (instr >> 6) & 0x7;
+				/* whether we are in immediate mode */
+				uint16_t imm_flag = (instr >> 5) & 0x1;
+				
+				if (imm_flag) 
+				{
+					uint16_t imm5 = sign_extend(intsr & 0x1F, 5);
+					reg[r0] = reg[r1] & imm5;
+				}
+				else 
+				{
+					uint16_t r2 = instr & 0x7;
+					reg[r0] = reg[r1] & reg[r2];
+				}
+				
+				update_flags(r0);
 				break;
+			}
 			case OP_NOT:
-				// not
+			{
+				/* destination register */
+				uint16_t r0 = (instr >> 9) & 0x7;
+				/* source register */
+				uint16_t r1 = (instr >> 6) & 0x7;
+				
+				reg[r0] = ~reg[r1];			/* not sure on ~ operator */
 				break;
+			}
 			case OP_BR:
-				// br
+			{
+				/* negative flag (bit) in instruction */
+				uint16_t neg_flag = (instr >> 9) & 0x4;
+				/* zero flag (bit) in instruction */
+				uint16_t zer_flag = (instr >> 9) & 0x2;
+				/* positive flag (bit) in instruction */
+				uint16_t pos_flag = (instr >> 9) & 0x1;
+				
+				/* register that stores flags */
+				uint16_t flags = reg[R_COND];
+				
+				if ((neg_flag & flags) | (zer_flag & flags) | (pos_flag & flags)) 
+				{
+					/* add PCoffset 9 to program counter */
+					reg[R_PC] = reg[R_PC] + sign_extend(instr & 0x1FF, 9);
+				}
 				break;
+			}
 			case OP_JMP:
-				// jmp
+			{
+				/* the register to read content of */
+				uint16_t r0 = (instr >> 6) & 0x7;
+				
+				reg[R_PC] = reg[r0];
 				break;
+			}
 			case OP_JSR:
-				// jsr
+			{
+				/* save */
+				reg[R_R7] = reg[R_PC];
+				/* whether offset or read from register */
+				uint16_t offset_flag = (instr >> 11) & 0x1;
+				
+				if (offset_flag)
+				{
+					reg[R_PC] = reg[R_PC] + sign_extend(instr & 0x7FF, 11);
+				}
+				else 
+				{
+					/* register to read address from */
+					uint16_t r0 = (instr >> 6) & 0x7;
+					reg[R_PC] = reg[r0];
+				}
+				
 				break;
+			}
 			case OP_LD:
-				// ld
+			{
+				/* register to write content to */
+				uint16_t r0 = (instr >> 9) & 0x7;
+				/* an address to read from */
+				uint16_t addr = reg[R_PC] + sign_extend(instr & 0x1FF, 9);
+				
+				reg[r0] = mem_read(addr);
+				update_flags(r0);
 				break;
+			}
 			case OP_LDI:
 			{
 				/* destination register */
@@ -140,15 +213,32 @@ int main(int argc, const char* argv[])
 				/* add pc_offset to current PC, look at that address and 
 					read from that address to get a new address to read from */
 				reg[r0] = mem_read(mem_read(reg[R_PC] + pc_offset));
+				
 				update_flags(r0);
 				break;
 			}
 			case OP_LDR:
-				// ldr
+			{
+				/* a register to write content to */
+				uint16_t r0 = (instr >> 9) & 0x7;
+				/* a register to get content from */
+				uint16_t r1 = (instr >> 6) & 0x7;
+				/* offset 6 */
+				uint16_t offset = sign_extend(instr & 0x3F, 6);
+				
+				reg[r0] = mem_read(reg[r1] + offset);
+				update_flags(r0);
 				break;
+			}
 			case OP_LEA:
-				// lea
+			{
+				/* a register to write address to */
+				uint16_t r0 = (instr >> 9) & 0x7;
+				
+				reg[r0] = reg[R_PC] + sign_extend(instr & 0x1FF, 9);
+				update_flags(r0);
 				break;
+			}
 			case OP_ST:
 				// st
 				break;
