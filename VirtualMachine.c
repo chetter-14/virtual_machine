@@ -277,30 +277,66 @@ int main(int argc, const char* argv[])
 			case OP_TRAP:
 			{
 				reg[R_R7] = reg[R_PC];
-				// reg[R_PC] = mem[instr & 0xFF];
 				
 				switch (instr & 0xFF) 
 				{
 					case TRAP_GETC:
-						// trap_getc
+					{
+						/* read a single ASCII character */
+						reg[R_R0] = (uint16_t)getchar();
+						update_flags(R_R0);
 						break;
+					}
 					case TRAP_OUT:
-						// trap_out
+					{
+						putc((char)reg[R_R0], stdout);
+						fflush(stdout);
 						break;
+					}
 					case TRAP_PUTS:
-						// trap_puts
+					{
+						uint16_t* c = memory + reg[R_R0];
+						while (*c)
+						{
+							putc((char)*c, stdout);
+							++c;
+						}
+						fflush(stdout);
 						break;
+					}
 					case TRAP_IN:
-						// trap_in
+					{
+						printf("Enter a character: ");
+						char c = getchar();
+						putc(c, stdout);
+						fflush(stdout);
+						reg[R_R0] = (uint16_t)c;
+						update_flags(R_R0);
 						break;
+					}
 					case TRAP_PUTSP:
-						// trap_putsp
+					{
+						/* one char per byte (2 bytes per word) */
+						uint16_t* c = memory + reg[R_R0];
+						while (*c)
+						{
+							char ch1 = (*c) & 0xFF;
+							putc(ch1, stdout);
+							char ch2 = (*c) >> 8;
+							if (ch2) putc(ch2, stdout);
+							++c;
+						}
+						fflush(stdout);
 						break;
+					}
 					case TRAP_HALT:
-						// trap_halt
+					{
+						puts("HALT");
+						fflush(stdout);
+						running = 0;
 						break;
+					}
 				}
-				
 				break;
 			}
 			case OP_RES:
