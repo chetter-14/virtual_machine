@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 
 #define MEMORY_MAX (1 << 16)
@@ -46,6 +47,17 @@ enum
 	FL_POS = 1 << 0; 	/* P */
 	FL_ZRO = 1 << 1;	/* Z */
 	FL_NEG = 1 << 2;	/* N */
+};
+
+/* TRAP CODES */
+enum 
+{
+	TRAP_GETC = 0x20, 	/* get character from keyboard, not echoed onto the terminal */
+	TRAP_OUT = 0x21,	/* output a character */
+	TRAP_PUTS = 0x22, 	/* output a word string */
+	TRAP_IN = 0x23,		/* get character from keyboar, echoed onto the terminal */
+	TRAP_PUTSP = 0x24,	/* output a byte string */
+	TRAP_HALT = 0x25,	/* halt the program */
 };
 
 
@@ -132,7 +144,6 @@ int main(int argc, const char* argv[])
 					uint16_t r2 = instr & 0x7;
 					reg[r0] = reg[r1] & reg[r2];
 				}
-				
 				update_flags(r0);
 				break;
 			}
@@ -144,24 +155,18 @@ int main(int argc, const char* argv[])
 				uint16_t r1 = (instr >> 6) & 0x7;
 				
 				reg[r0] = ~reg[r1];			/* not sure on ~ operator */
+				update_flags(r0);
 				break;
 			}
 			case OP_BR:
 			{
-				/* negative flag (bit) in instruction */
-				uint16_t neg_flag = (instr >> 9) & 0x4;
-				/* zero flag (bit) in instruction */
-				uint16_t zer_flag = (instr >> 9) & 0x2;
-				/* positive flag (bit) in instruction */
-				uint16_t pos_flag = (instr >> 9) & 0x1;
+				/* condition flag (3 bits) in instruction */
+				uint16_t cond_flag = (instr >> 9) & 0x7;
 				
-				/* register that stores flags */
-				uint16_t flags = reg[R_COND];
-				
-				if ((neg_flag & flags) | (zer_flag & flags) | (pos_flag & flags)) 
+				if (cond_flag & reg[R_COND]) 
 				{
 					/* add PCoffset 9 to program counter */
-					reg[R_PC] = reg[R_PC] + sign_extend(instr & 0x1FF, 9);
+					reg[R_PC] += sign_extend(instr & 0x1FF, 9);
 				}
 				break;
 			}
@@ -169,7 +174,6 @@ int main(int argc, const char* argv[])
 			{
 				/* the register to read content of */
 				uint16_t r0 = (instr >> 6) & 0x7;
-				
 				reg[R_PC] = reg[r0];
 				break;
 			}
@@ -182,7 +186,7 @@ int main(int argc, const char* argv[])
 				
 				if (offset_flag)
 				{
-					reg[R_PC] = reg[R_PC] + sign_extend(instr & 0x7FF, 11);
+					reg[R_PC] += sign_extend(instr & 0x7FF, 11);
 				}
 				else 
 				{
@@ -190,7 +194,6 @@ int main(int argc, const char* argv[])
 					uint16_t r0 = (instr >> 6) & 0x7;
 					reg[R_PC] = reg[r0];
 				}
-				
 				break;
 			}
 			case OP_LD:
@@ -240,21 +243,70 @@ int main(int argc, const char* argv[])
 				break;
 			}
 			case OP_ST:
-				// st
+			{
+				/* a register to read content of */
+				uint16_t r0 = (instr >> 9) & 0x7;
+				/* an address to which we're going to write */
+				uint16_t addr = reg[R_PC] + sign_extend(instr & 0x1FF, 9);
+				
+				mem_write(addr, reg[r0]);
 				break;
+			}
 			case OP_STI:
-				// sti
+			{
+				/* a register to read content of */
+				uint16_t r0 = (instr >> 9) & 0x7;
+				/* an address whose content will be the address to write to */
+				uint16_t addr = reg[R_PC] + sign_extend(instr & 0x1FF, 9);
+				
+				mem_write(mem_read(addr), reg[r0]);
 				break;
+			}
 			case OP_STR:
-				// str
+			{
+				/* a register which content is going to be stored somewhere */
+				uint16_t r0 = (instr >> 9) & 0x7;
+				/* a base register */
+				uint16_t r1 = (instr >> 6) & 0x7;
+				/* offset 6 */
+				uint16_t offset = sign_extend(instr & 0x3F, 6)
+				
+				mem_write(reg[r1] + offset, reg[r0]);
 				break;
+			}
 			case OP_TRAP:
-				// trap
+			{
+				reg[R_R7] = reg[R_PC];
+				// reg[R_PC] = mem[instr & 0xFF];
+				
+				switch (instr & 0xFF) 
+				{
+					case TRAP_GETC:
+						// trap_getc
+						break;
+					case TRAP_OUT:
+						// trap_out
+						break;
+					case TRAP_PUTS:
+						// trap_puts
+						break;
+					case TRAP_IN:
+						// trap_in
+						break;
+					case TRAP_PUTSP:
+						// trap_putsp
+						break;
+					case TRAP_HALT:
+						// trap_halt
+						break;
+				}
+				
 				break;
+			}
 			case OP_RES:
 			case OP_RTI:
+				abort();
 			default:
-				//	bad opcode
 				break;
 		}
 	}
