@@ -1,17 +1,22 @@
 #include <stdio.h>
-#include <stdint.h>
+#include <stdint.h>		//	uint16_t
 #include <stdlib.h>
+#include <signal.h>		//	SIGINT
 /* windows only */
-#include <Windows.h>
-#include <conio.h>
+#include <unistd.h>
+#include <fcntl.h>
 
-HANDLE hStdin = INVALID_HANDLE_VALUE;
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/termios.h>
+#include <sys/mman.h>
+
 
 /* MEMORY MAPPED REGISTERS */
 enum
 {
-	MR_KBSR = 0xFE00;	/* keyboard status */
-	MR_KBDR = 0xFE02;	/* keyboard data */	
+	MR_KBSR = 0xFE00,	/* keyboard status */
+	MR_KBDR = 0xFE02	/* keyboard data */	
 };
 /* TRAP CODES */
 enum 
@@ -68,9 +73,9 @@ enum
 /* FLAGS */
 enum 
 {
-	FL_POS = 1 << 0; 	/* P */
-	FL_ZRO = 1 << 1;	/* Z */
-	FL_NEG = 1 << 2;	/* N */
+	FL_POS = 1 << 0, 	/* P */
+	FL_ZRO = 1 << 1,	/* Z */
+	FL_NEG = 1 << 2		/* N */
 };
 
 /* SIGN EXTENSION */
@@ -136,7 +141,14 @@ int read_image(const char* image_path)
 /* CHECK KEY */
 uint16_t check_key()
 {
-	return WaitForSingleObject(hStdin, 1000) == WAIT_OBJECT_0 && _kbhit();
+	fd_set readfds;
+    FD_ZERO(&readfds);
+    FD_SET(STDIN_FILENO, &readfds);
+
+    struct timeval timeout;
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 0;
+    return select(1, &readfds, NULL, NULL, &timeout) != 0;
 }
 
 /* MEMORY ACCESS */
@@ -162,22 +174,19 @@ uint16_t mem_read(uint16_t address)
 }
 
 /* INPUT BUFFERING AND HANDLE INTERRUPT */
-DWORD fdwMode, fdwOldMode;
+struct termios original_tio;
 
 void disable_input_buffering()
 {
-	hStdin = GetStdHandle(STD_INPUT_HANDLE);
-	GetConsoleMode(hStdin, &fdwOldMode);	/* save old mode */
-	fdwMode = fdwOldMode 
-			^ ENABLE_ECHO_INPUT		/* no input echo */
-			^ ENABLE_LINE_INPUT;	/* return when one or more characters are available */
-	SetConsoleMode(hStdin, fdwMode);	/* set new mode */
-	FlushConsoleInputBuffer(hStdin);	/* clear buffer */
+	tcgetattr(STDIN_FILENO, &original_tio);
+    struct termios new_tio = original_tio;
+    new_tio.c_lflag &= ~ICANON & ~ECHO;
+    tcsetattr(STDIN_FILENO, TCSANOW, &new_tio);
 }
 
 void restore_input_buffering()
 {
-	SetConsoleMode(hStdin, fdwOldMode);
+	tcsetattr(STDIN_FILENO, TCSANOW, &original_tio);
 }
 
 void handle_interrupt(int signal)
@@ -215,7 +224,7 @@ int main(int argc, const char* argv[])
 	
 	/* set the PC to starting position */
 	/* 0x3000 is the default */
-	enum { PC_START = 0x3000; }
+	enum { PC_START = 0x3000 };
 	reg[R_PC] = PC_START;
 	
 	int running = 1;
@@ -261,7 +270,7 @@ int main(int argc, const char* argv[])
 				
 				if (imm_flag) 
 				{
-					uint16_t imm5 = sign_extend(intsr & 0x1F, 5);
+					uint16_t imm5 = sign_extend(instr & 0x1F, 5);
 					reg[r0] = reg[r1] & imm5;
 				}
 				else 
@@ -394,7 +403,7 @@ int main(int argc, const char* argv[])
 				/* a base register */
 				uint16_t r1 = (instr >> 6) & 0x7;
 				/* offset 6 */
-				uint16_t offset = sign_extend(instr & 0x3F, 6)
+				uint16_t offset = sign_extend(instr & 0x3F, 6);
 				
 				mem_write(reg[r1] + offset, reg[r0]);
 				break;
