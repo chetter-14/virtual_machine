@@ -1,5 +1,19 @@
 # LC-3 Virtual Machine
-Virtual Machine in C
+
+## What it is
+
+A custom virtual machine written in C to execute LC-3 executable programs.
+
+## Implementation details
+
+Virtual machine core consists of:
+- *Memory*
+- *Registers*
+- *State machine* (something like opcodes interpreter)
+
+There are some other little things like: platform dependent console handling, reading an executable file into vm memory, etc.
+
+## Resources 
 
 link to the tutorial - https://www.jmeiners.com/lc3-vm/
 
