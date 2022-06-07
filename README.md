@@ -1,5 +1,4 @@
 # LC-3 Virtual Machine
-
 ## What it is
 
 A custom virtual machine written in C to execute LC-3 executable programs.
